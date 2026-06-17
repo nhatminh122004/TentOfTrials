@@ -1,4 +1,5 @@
 import React from 'react';
+import ErrorBoundary from '../components/ErrorBoundary';
 
 const settingsSections = [
   {
@@ -117,4 +118,10 @@ const Settings: React.FC = () => {
   );
 };
 
-export default Settings;
+const SettingsWithErrorBoundary: React.FC = () => (
+  <ErrorBoundary componentName="Settings">
+    <Settings />
+  </ErrorBoundary>
+);
+
+export default SettingsWithErrorBoundary;

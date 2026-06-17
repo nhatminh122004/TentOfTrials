@@ -30,7 +30,7 @@
  * transformation approach would be more robust.
  */
 
-import { get, post, put, del } from './api';
+import { get, post, put, del } from '../services/api';
 import { aggregateTradesToOHLCV } from './dataTransforms';
 
 // ---------------------------------------------------------------------------

@@ -29,6 +29,7 @@
  */
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import ErrorBoundary from '../components/ErrorBoundary';
 import { OrderBook } from '../components/OrderBook';
 import { TradingChart } from '../components/TradingChart';
 import { useMarketData } from '../hooks/useMarketData';
@@ -70,7 +71,7 @@ const SIDES = ['buy', 'sell'] as const;
 // COMPONENT
 // ---------------------------------------------------------------------------
 
-export function TradePage() {
+function TradePageContent() {
   const [activeTab, setActiveTab] = useState<TabKey>('chart');
   const [selectedInstrument, setSelectedInstrument] = useState('BTC/USD');
   const [timeframe, setTimeframe] = useState<typeof TIMEFRAMES[number]>('1h');
@@ -632,4 +633,12 @@ export function TradePage() {
   );
 }
 
-export default TradePage;
+export const TradePage = TradePageContent;
+
+const TradePageWithErrorBoundary: React.FC = () => (
+  <ErrorBoundary componentName="TradePage">
+    <TradePageContent />
+  </ErrorBoundary>
+);
+
+export default TradePageWithErrorBoundary;

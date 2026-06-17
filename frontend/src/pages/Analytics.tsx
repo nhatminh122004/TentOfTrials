@@ -1,4 +1,5 @@
 import React from 'react';
+import ErrorBoundary from '../components/ErrorBoundary';
 
 const metricPlaceholders = [
   { id: 'requests', label: 'Request Volume', type: 'line' },
@@ -61,4 +62,10 @@ const Analytics: React.FC = () => {
   );
 };
 
-export default Analytics;
+const AnalyticsWithErrorBoundary: React.FC = () => (
+  <ErrorBoundary componentName="Analytics">
+    <Analytics />
+  </ErrorBoundary>
+);
+
+export default AnalyticsWithErrorBoundary;
