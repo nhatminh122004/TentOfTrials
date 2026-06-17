@@ -1,8 +1,0 @@
-fallback diagnostic logd
-
-python3 build.py was rerun after rebasing onto origin/main at commit 971d1ef4.
-The build stopped before module compilation because the bundled macOS encryptly
-binary exited nonzero during its preflight and did not create an encrypted .logd.
-
-See diagnostic/build-971d1ef4.json for the generated report and exact blocker:
-encryptly preflight completed without creating a .logd
