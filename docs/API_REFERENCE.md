@@ -48,6 +48,18 @@ Tokens are obtained from the `/auth/login` endpoint and expire after 1 hour.
 Use the `/auth/refresh` endpoint with the refresh token to obtain a new
 access token without requiring the user to re-authenticate.
 
+### Request IDs
+
+Clients may send a request ID with the `X-Request-Id` header. The backend
+accepts values that are non-empty, contain no control characters, and are under
+128 characters. If the header is missing or invalid, the backend generates a
+UUID request ID.
+
+Every backend response includes the final request ID in the `X-Request-Id`
+header. Backend request and response logs include the same value in the
+`request_id` field so production traces can be correlated with client-visible
+responses.
+
 ### Rate Limiting
 
 API requests are rate-limited per API key and per IP address. The rate limit
