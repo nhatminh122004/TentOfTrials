@@ -45,6 +45,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -66,6 +67,11 @@ const (
 	ContextKeyClientIP   contextKey = "client_ip"
 	ContextKeyStartTime  contextKey = "start_time"
 	ContextKeyAuthMethod contextKey = "auth_method"
+)
+
+const (
+	EnvRateLimitPerMinute = "MARKET_RATE_LIMIT_PER_MINUTE"
+	EnvRateLimitBurst     = "MARKET_RATE_LIMIT_BURST"
 )
 
 // ---------------------------------------------------------------------------
@@ -230,9 +236,10 @@ func AuthMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// RateLimitMiddleware applies rate limiting based on client IP or API key.
-// Uses a token bucket algorithm with configurable rate and burst.
+// RateLimitMiddleware applies IP-based rate limiting with a token bucket.
 func RateLimitMiddleware(ratePerSecond float64, burst int) func(http.Handler) http.Handler {
+	ratePerSecond, burst, limitPerMinute := resolveRateLimitSettings(ratePerSecond, burst)
+
 	var mu sync.Mutex
 	clients := make(map[string]*tokenBucket)
 
@@ -252,34 +259,38 @@ func RateLimitMiddleware(ratePerSecond float64, burst int) func(http.Handler) ht
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			key := getClientIP(r)
-			if apiKey := r.Header.Get("X-API-Key"); apiKey != "" {
-				key = apiKey
-			}
 
 			mu.Lock()
 			bucket, exists := clients[key]
+			now := time.Now()
 			if !exists {
 				bucket = &tokenBucket{
 					tokens:     float64(burst),
 					maxTokens:  float64(burst),
 					rate:       ratePerSecond,
-					lastAccess: time.Now(),
+					lastAccess: now,
+					lastCheck:  now,
 				}
 				clients[key] = bucket
 			}
-			bucket.lastAccess = time.Now()
+			bucket.lastAccess = now
 			mu.Unlock()
 
 			allowed, remaining, reset := bucket.allow()
-			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(burst))
-			w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(remaining))
-			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(reset, 10))
+			w.Header().Set(RateLimitLimitHeader, strconv.Itoa(limitPerMinute))
+			w.Header().Set(RateLimitRemainingHeader, strconv.Itoa(remaining))
+			w.Header().Set(RateLimitResetHeader, strconv.FormatInt(reset, 10))
 
 			if !allowed {
+				retryAfter := reset - time.Now().Unix()
+				if retryAfter < 1 {
+					retryAfter = 1
+				}
+				w.Header().Set(RateLimitRetryAfterHeader, strconv.FormatInt(retryAfter, 10))
 				writeJSON(w, http.StatusTooManyRequests, map[string]interface{}{
-					"error":   "rate_limit_exceeded",
-					"message": "Too many requests. Please slow down.",
-					"retry_after": reset - time.Now().Unix(),
+					"error":       "rate_limit_exceeded",
+					"message":     "Too many requests. Please slow down.",
+					"retry_after": retryAfter,
 				})
 				return
 			}
@@ -314,13 +325,44 @@ func (tb *tokenBucket) allow() (bool, int, int64) {
 	if tb.tokens >= 1.0 {
 		tb.tokens--
 		remaining := int(tb.tokens)
-		reset := now.Add(time.Duration((tb.maxTokens-tb.tokens)/tb.rate) * time.Second).Unix()
+		reset := rateLimitResetTime(now, (tb.maxTokens-tb.tokens)/tb.rate).Unix()
 		return true, remaining, reset
 	}
 
 	remaining := 0
-	reset := now.Add(time.Duration((1.0-tb.tokens)/tb.rate) * time.Second).Unix()
+	reset := rateLimitResetTime(now, (1.0-tb.tokens)/tb.rate).Unix()
 	return false, remaining, reset
+}
+
+func resolveRateLimitSettings(ratePerSecond float64, burst int) (float64, int, int) {
+	limitPerMinute := int(ratePerSecond*60 + 0.5)
+	if limitPerMinute <= 0 {
+		limitPerMinute = DefaultRateLimitPerMinute
+	}
+
+	if value := os.Getenv(EnvRateLimitPerMinute); value != "" {
+		if parsed, err := strconv.Atoi(value); err == nil && parsed > 0 {
+			limitPerMinute = parsed
+		}
+	}
+
+	if burst <= 0 {
+		burst = limitPerMinute
+	}
+	if value := os.Getenv(EnvRateLimitBurst); value != "" {
+		if parsed, err := strconv.Atoi(value); err == nil && parsed > 0 {
+			burst = parsed
+		}
+	}
+
+	return float64(limitPerMinute) / 60.0, burst, limitPerMinute
+}
+
+func rateLimitResetTime(now time.Time, seconds float64) time.Time {
+	if seconds <= 0 {
+		seconds = 1
+	}
+	return now.Add(time.Duration(seconds * float64(time.Second)))
 }
 
 // MetricsMiddleware collects request metrics for monitoring.

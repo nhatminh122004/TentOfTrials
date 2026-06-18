@@ -76,8 +76,9 @@ const (
 	DefaultMaxHeaderBytes    = 1 << 20
 
 	// Rate limiting defaults
-	DefaultRateLimitPerSecond = 10
-	DefaultRateLimitBurst     = 20
+	DefaultRateLimitPerMinute = 120
+	DefaultRateLimitPerSecond = float64(DefaultRateLimitPerMinute) / 60
+	DefaultRateLimitBurst     = DefaultRateLimitPerMinute
 	DefaultRateLimitWindow    = time.Second
 
 	// WebSocket defaults
@@ -102,9 +103,10 @@ const (
 	APIVersionHeader = "X-API-Version"
 
 	// Rate limit headers
-	RateLimitLimitHeader     = "X-RateLimit-Limit"
-	RateLimitRemainingHeader = "X-RateLimit-Remaining"
-	RateLimitResetHeader     = "X-RateLimit-Reset"
+	RateLimitLimitHeader      = "X-RateLimit-Limit"
+	RateLimitRemainingHeader  = "X-RateLimit-Remaining"
+	RateLimitResetHeader      = "X-RateLimit-Reset"
+	RateLimitRetryAfterHeader = "Retry-After"
 )
 
 // ---------------------------------------------------------------------------
@@ -455,16 +457,18 @@ func (g *Gateway) rateLimitMiddleware(next http.Handler) http.Handler {
 		}
 
 		key := getClientIP(r)
-		if apiKey := r.Header.Get("X-API-Key"); apiKey != "" {
-			key = apiKey
-		}
 
 		allowed, remaining, reset := g.rateLimiter.Allow(key)
-		w.Header().Set(RateLimitLimitHeader, strconv.Itoa(g.config.RateLimitBurst))
+		w.Header().Set(RateLimitLimitHeader, strconv.Itoa(g.rateLimiter.LimitPerMinute()))
 		w.Header().Set(RateLimitRemainingHeader, strconv.Itoa(remaining))
 		w.Header().Set(RateLimitResetHeader, strconv.FormatInt(reset, 10))
 
 		if !allowed {
+			retryAfter := reset - time.Now().Unix()
+			if retryAfter < 1 {
+				retryAfter = 1
+			}
+			w.Header().Set(RateLimitRetryAfterHeader, strconv.FormatInt(retryAfter, 10))
 			atomic.AddInt64(&g.metrics.RequestsRateLimited, 1)
 			writeJSON(w, http.StatusTooManyRequests, ErrRateLimited)
 			return
@@ -681,10 +685,11 @@ func (g *Gateway) handleWebSocket() http.HandlerFunc {
 // ---------------------------------------------------------------------------
 
 type RateLimiter struct {
-	mu       sync.Mutex
-	clients  map[string]*clientRateLimit
-	rate     float64
-	burst    int
+	mu             sync.Mutex
+	clients        map[string]*clientRateLimit
+	rate           float64
+	burst          int
+	limitPerMinute int
 }
 
 type clientRateLimit struct {
@@ -693,11 +698,17 @@ type clientRateLimit struct {
 }
 
 func NewRateLimiter(rate float64, burst int) *RateLimiter {
+	rate, burst, limitPerMinute := resolveRateLimitSettings(rate, burst)
 	return &RateLimiter{
-		clients: make(map[string]*clientRateLimit),
-		rate:    rate,
-		burst:   burst,
+		clients:        make(map[string]*clientRateLimit),
+		rate:           rate,
+		burst:          burst,
+		limitPerMinute: limitPerMinute,
 	}
+}
+
+func (rl *RateLimiter) LimitPerMinute() int {
+	return rl.limitPerMinute
 }
 
 func (rl *RateLimiter) Allow(key string) (bool, int, int64) {
@@ -723,11 +734,11 @@ func (rl *RateLimiter) Allow(key string) (bool, int, int64) {
 
 	if client.tokens >= 1.0 {
 		client.tokens--
-		resetTime := now.Add(time.Duration((float64(rl.burst)-client.tokens)/rl.rate) * time.Second)
+		resetTime := rateLimitResetTime(now, (float64(rl.burst)-client.tokens)/rl.rate)
 		return true, int(client.tokens), resetTime.Unix()
 	}
 
-	resetTime := now.Add(time.Duration((1.0-client.tokens)/rl.rate) * time.Second)
+	resetTime := rateLimitResetTime(now, (1.0-client.tokens)/rl.rate)
 	return false, 0, resetTime.Unix()
 }
 
