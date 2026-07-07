@@ -1,0 +1,35 @@
+{
+  "generated_at": "2026-07-07T16:59:24.908688+00:00",
+  "commit": "ab53d258",
+  "diagnostic_logd": [
+    "diagnostic/build-ab53d258-part001.logd",
+    "diagnostic/build-ab53d258-part002.logd",
+    "diagnostic/build-ab53d258-part003.logd",
+    "diagnostic/build-ab53d258-part004.logd",
+    "diagnostic/build-ab53d258-part005.logd",
+    "diagnostic/build-ab53d258-part006.logd",
+    "diagnostic/build-ab53d258-part007.logd",
+    "diagnostic/build-ab53d258-part008.logd",
+    "diagnostic/build-ab53d258-part009.logd",
+    "diagnostic/build-ab53d258-part010.logd"
+  ],
+  "diagnostic_logd_error": null,
+  "message_blocker": null,
+  "chunked": true,
+  "chunk_size_bytes": 41943040,
+  "password": "9e9aea7c1298fec57c8b",
+  "decrypt_command": "encryptly unpack diagnostic/build-ab53d258.logd <outdir> --password 9e9aea7c1298fec57c8b",
+  "total_modules": 1,
+  "passed": 0,
+  "failed": 1,
+  "modules": [
+    {
+      "name": "market",
+      "status": "FAIL",
+      "elapsed_seconds": 0,
+      "artifact": null,
+      "output": "Command not found: [WinError 2] The system cannot find the file specified"
+    }
+  ],
+  "pr_note": "Include the encrypted diagnostic logd artifact(s): diagnostic/build-ab53d258-part001.logd, diagnostic/build-ab53d258-part002.logd, diagnostic/build-ab53d258-part003.logd, diagnostic/build-ab53d258-part004.logd, diagnostic/build-ab53d258-part005.logd, diagnostic/build-ab53d258-part006.logd, diagnostic/build-ab53d258-part007.logd, diagnostic/build-ab53d258-part008.logd, diagnostic/build-ab53d258-part009.logd, diagnostic/build-ab53d258-part010.logd. The encrypted .logd is the required diagnostic content for PR review; this JSON file is metadata. Maintainers may ask you to remove these diagnostic artifacts before merging."
+}
