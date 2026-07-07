@@ -84,6 +84,11 @@ def diagnostic_paths_for_commit() -> tuple[Path, Path, str]:
     return logd_path, metadata_path, commit_id
 
 
+def relative_to_root_posix(path: Path) -> str:
+    """Return a repository-relative path that matches GitHub's POSIX diff paths."""
+    return path.relative_to(ROOT).as_posix()
+
+
 def split_diagnostic_logd(logd_path: Path, chunk_size: int = DIAGNOSTIC_CHUNK_SIZE) -> list[Path]:
     """Split an oversized .logd into numbered .logd chunks and remove the original."""
     if logd_path.stat().st_size <= chunk_size:
@@ -540,7 +545,7 @@ def build_diagnostic_report(
 
     decrypt_target = logd_relpaths[0] if logd_relpaths and len(logd_relpaths) == 1 else None
     if logd_relpaths and len(logd_relpaths) > 1:
-        decrypt_target = str((DIAGNOSTIC_DIR / f"build-{commit_id}.logd").relative_to(ROOT))
+        decrypt_target = relative_to_root_posix(DIAGNOSTIC_DIR / f"build-{commit_id}.logd")
 
     report = {
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -743,8 +748,8 @@ def generate_logd(
 
         safe_pw = sr.stdout.strip()
         logd_files = split_diagnostic_logd(logd_path)
-        logd_relpaths = [str(path.relative_to(ROOT)) for path in logd_files]
-        decrypt_target = logd_relpaths[0] if len(logd_relpaths) == 1 else str(logd_path.relative_to(ROOT))
+        logd_relpaths = [relative_to_root_posix(path) for path in logd_files]
+        decrypt_target = logd_relpaths[0] if len(logd_relpaths) == 1 else relative_to_root_posix(logd_path)
         write_diagnostic_report(
             metadata_path,
             build_diagnostic_report(
