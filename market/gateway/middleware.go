@@ -38,9 +38,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -398,12 +396,6 @@ func generateUUID() string {
 	return hex.EncodeToString(b)
 }
 
-func generateAPIKey() string {
-	b := make([]byte, 32)
-	rand.Read(b)
-	return base64.URLEncoding.EncodeToString(b)
-}
-
 func extractToken(r *http.Request) string {
 	auth := r.Header.Get("Authorization")
 	if strings.HasPrefix(auth, "Bearer ") {
@@ -426,10 +418,4 @@ func validateToken(token string) (string, string, error) {
 	//   5. Extract user ID and session ID
 	//   6. Return them
 	return "user_stub", "session_stub", nil
-}
-
-func writeJSON(w http.ResponseWriter, status int, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
 }
